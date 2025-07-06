@@ -2,48 +2,78 @@ import {
   createWalletClient,
   custom,
   createPublicClient,
-} from "https://esm.sh/viem";
-import { contractAddress } from "./constants";
+  parseEther,
+  defineChain
+} from "https://esm.sh/viem"
+import { abi, contractAddress } from "./constants.js"
 
-const connectButton = document.getElementById("connectButton");
-const fundButton = document.getElementById("fundButton");
-const ethAmountInput = document.getElementById("ethAmount");
+const connectButton = document.getElementById("connectButton")
+const fundButton = document.getElementById("fundButton")
+const ethAmountInput = document.getElementById("ethAmount")
 
-let walletClient;
-let publicClient;
+let walletClient
+let publicClient
 
 async function connect() {
   if (typeof window.ethereum !== "undefined") {
     walletClient = createWalletClient({
-      transport: custom(window.ethereum),
-    });
-    await walletClient.requestAddresses();
-    connectButton.innerHTML = "Connected!";
+      transport: custom(window.ethereum)
+    })
+    await walletClient.requestAddresses()
+    connectButton.innerHTML = "Connected!"
   } else {
-    connectButton.innerText = "Please install MetaMask";
+    connectButton.innerText = "Please install MetaMask"
   }
 }
 
 async function fund() {
-  const ethAmount = ethAmountInput.value;
-  console.log(`Funding with ${ethAmount} ETH...`);
+  const ethAmount = ethAmountInput.value
+  console.log(`Funding with ${ethAmount} ETH...`)
   if (typeof window.ethereum !== "undefined") {
     walletClient = createWalletClient({
-      transport: custom(window.ethereum),
-    });
-    await walletClient.requestAddresses();
+      transport: custom(window.ethereum)
+    })
+    const [connectedAccount] = await walletClient.requestAddresses()
+    const currentChain = await getCurrentChain(walletClient)
 
     publicClient = createPublicClient({
-      transport: custom(window.ethereum),
-    });
+      transport: custom(window.ethereum)
+    })
+    console.log(parseEther(ethAmount))
 
-    await publicClient.simulateContract({
+    const { request } = await publicClient.simulateContract({
       address: contractAddress,
-    });
+      abi: abi,
+      functionName: "fund",
+      account: connectedAccount,
+      chain: currentChain,
+      value: parseEther(ethAmount)
+    })
+    const hash = await walletClient.writeContract(request)
+    console.log(hash)
   } else {
-    connectButton.innerText = "Please install MetaMask";
+    connectButton.innerText = "Please install MetaMask"
   }
 }
 
-connectButton.onclick = connect;
-fundButton.onclick = fund;
+async function getCurrentChain(client) {
+  const chainId = await client.getChainId()
+  const currentChain = defineChain({
+    id: chainId,
+    name: "Custom Chain",
+    nativeCurrency: {
+      name: "Ether",
+      symbol: "ETH",
+      decimals: 18
+    },
+    rpcUrls: {
+      default: {
+        https: ["http://localhost:8545"]
+      }
+    }
+  })
+  return currentChain
+}
+
+connectButton.onclick = connect
+fundButton.onclick = fund
